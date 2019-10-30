@@ -10,6 +10,7 @@
       deftemplate flag
         (slot f (type INTEGER) (default 0))
         (slot ff (type INTEGER) (default 0))
+        (slot f_best (type INTEGER) (default 0))
 )
 
 (
@@ -18,10 +19,29 @@
 )
 
 (
+      deftemplate iter_checker
+        (slot icheck (type INTEGER) (default 0))
+)
+
+(
+      deftemplate array_checker
+        (slot acheck (type INTEGER) (default 0))
+)
+
+(
+      deftemplate locator_checker
+        (slot locator (type INTEGER) (default 0))
+)
+
+(
       deffacts flagtemp
         (flag (f 0))
         (flag (ff 0))
+        (flag (f_best 0))
         (final_depth (dpth 0))
+        (iter_checker (icheck 0))
+        (array_checker (acheck 0))
+        (locator_checker (locator 0))
 )
 
 
@@ -41,14 +61,14 @@
 ;;-------
 (
     deffacts Initial_Puzzle
-      (Puzzle_8 (Location 1) (isUsed YES) (Numeral 4))
-      (Puzzle_8 (Location 2) (isUsed YES) (Numeral 3))
-      (Puzzle_8 (Location 3) (isUsed YES) (Numeral 1))
-      (Puzzle_8 (Location 4) (isUsed YES) (Numeral 8))
-      (Puzzle_8 (Location 5) (isUsed YES) (Numeral 2))
-      (Puzzle_8 (Location 6) (isUsed YES) (Numeral 5))
-      (Puzzle_8 (Location 7) (isUsed YES) (Numeral 7))
-      (Puzzle_8 (Location 8) (isUsed YES) (Numeral 6))
+      (Puzzle_8 (Location 1) (isUsed YES) (Numeral 2))
+      (Puzzle_8 (Location 2) (isUsed YES) (Numeral 4))
+      (Puzzle_8 (Location 3) (isUsed YES) (Numeral 3))
+      (Puzzle_8 (Location 4) (isUsed YES) (Numeral 7))
+      (Puzzle_8 (Location 5) (isUsed YES) (Numeral 1))
+      (Puzzle_8 (Location 6) (isUsed YES) (Numeral 6))
+      (Puzzle_8 (Location 7) (isUsed YES) (Numeral 5))
+      (Puzzle_8 (Location 8) (isUsed YES) (Numeral 8))
       (Puzzle_8 (Location 9) (isUsed NO) (Numeral 9))
 )
 
@@ -155,7 +175,7 @@
 
 (
       defrule backtracking
-        (declare (salience 3))
+        (declare (salience 5))
         ?fd<-(final_depth (dpth ?dp))
         ?fmove<-(flag (f ?fmeaning) (ff ?finmeaning))
         (not
@@ -171,7 +191,7 @@
 
 (
       defrule finish
-        (declare (salience 4))
+        (declare (salience 6))
         ?fmove<-(flag (f ?fmeaning) (ff ?finmeaning))
         (test (<> ?finmeaning 1))
         (not
@@ -191,10 +211,14 @@
 ;; уже есть два состояния с различными идентификаторами (расположения), поэтому из нач состояние нельзя двигаться
 (
         defrule first_move
+          (declare (salience 3))
           ?fmove<-(flag (f ?fmeaning))
+          ?id<-(iter_checker (icheck ?ich))
+          ?ad<-(array_checker (acheck ?ach))
+          ?locat<-(locator_checker (locator ?l))
           ?from<-(Puzzle_8 (Location ?from_location) (isUsed YES) (Numeral ?number))
           ?to<-(Puzzle_8 (Location ?to_location) (isUsed NO) (Numeral ~?number))
-          (Step_Of_Puzzle (from ?from_location) (to $?to_array&:(member$ ?to_location ?to_array)))
+          ?stp<-(Step_Of_Puzzle (from ?from_location) (to $?to_array&:(member$ ?to_location ?to_array)))
           ?st<-(state (flag_last YES) (Location ?state_location) (Depth ?dep) (visited_numerals $?some_nums))
           (test (= ?fmeaning 0))
           (
@@ -203,9 +227,6 @@
               (state (Location 0) (Depth 0) (visited_numerals $?some_nums)) 
           )
           =>
-          (modify ?st 
-            (flag_last NO)
-          )
           (modify ?from
             (isUsed NO) 
             (Numeral 9)
@@ -217,49 +238,207 @@
           (modify ?fmove 
             (f 1)
           )
-          (assert (state (flag_last YES) (Location (+ ?state_location 1)) (Depth (+ ?dep 1))))
+          (bind ?c (+ ?ich 1))
+          (bind ?new_l (+ ?l 1))
+          (bind ?temp (nth$ 1 (find-fact ((?f Step_Of_Puzzle)) (= ?f:from ?to_location))))
+          (bind $?from_array (fact-slot-value ?temp to))
+          (bind ?len (length$ ?from_array))
+          ;;(printout t crlf ?temp crlf)
+          ;;(printout t crlf "From " ?from_location)
+          ;;(printout t crlf "To " ?to_location)
+          ;;(printout t crlf "Length of 'to' is " ?len)
+          ;;(printout t crlf "Visited "?c crlf)
+          (modify ?id 
+            (icheck ?c)
+          )
+          (modify ?ad 
+            (acheck ?len)
+          )
+          (modify ?locat 
+            (locator ?new_l)
+          )
+          (assert (state (flag_last NO) (Location ?new_l) (Depth (+ ?dep 1))))
 )
 
 ;; Вычисляем эвристическую стоимость по критерию (количество фишек не на своих местах)
 (
       defrule get_h_cost
-        (declare (salience 2))
-        ?st<-(state (flag_last YES) (visited_numerals $?nums))
+        (declare (salience 4))
+        ?st<-(state (heuristic_cost ?cost) (visited_numerals $?nums))
+        (test (= ?cost 0))
         =>
         (bind ?temp (misplaced ?nums))
         (modify ?st (heuristic_cost ?temp))
 )
 
 (
+      deffunction find_minimal (?value1 ?value2)
+        (< ?value1 ?value2)
+)
+
+(
       defrule find_best_cost
-        (declare (salience 1))
+        (declare (salience 2))
+        ?id<-(iter_checker (icheck ?ich))
+        ?ad<-(array_checker (acheck ?ach))
+        ?element1<-(Puzzle_8 (Location 1))
+        ?element2<-(Puzzle_8 (Location 2))
+        ?element3<-(Puzzle_8 (Location 3))
+        ?element4<-(Puzzle_8 (Location 4))
+        ?element5<-(Puzzle_8 (Location 5))
+        ?element6<-(Puzzle_8 (Location 6))
+        ?element7<-(Puzzle_8 (Location 7))
+        ?element8<-(Puzzle_8 (Location 8))
+        ?element9<-(Puzzle_8 (Location 9))
+        ?from<-(Puzzle_8 (Location ?from_location) (isUsed YES) (Numeral ?number))
+        ?to<-(Puzzle_8 (Location ?to_location) (isUsed NO) (Numeral ~?number))
+        ?stp<-(Step_Of_Puzzle (from ?from_location) (to $?to_array&:(member$ ?to_location ?to_array)))
+        ?fbest<-(flag (f_best ?fb))
+        (test (<> ?fb 1))
         ?fd<-(final_depth (dpth ?dp))
+        ?penultimate_state<-(state (flag_last YES))
+        ?st<-(state (Depth ?dp) (flag_last NO) (heuristic_cost ?value1) (visited_numerals $?nums))
+        (not (state (Depth ?dp) (flag_last NO) (visited_numerals $?some_nums) (heuristic_cost ?value2&:(find_minimal ?value2 ?value1))))
         =>
-        ;;printout((sort (find-all-facts ((?f Depth)) (eq ?f ?dp))))
+        (bind ?temp (nth$ 1 (find-fact ((?f Step_Of_Puzzle)) (= ?f:from ?to_location))))
+        (bind $?from_array (fact-slot-value ?temp to))
+        (bind ?len (length$ ?from_array))
+        ;;(printout t crlf (sort > (find-all-facts ((?f state)) (= ?f:Depth ?dp)) crlf))
+        ;;(printout t "Fact " ?value1 " is the minimum" crlf)
+        ;;(printout t crlf (find-all-facts ((?f state)) (= ?f:Depth ?dp)) crlf)
+        (modify ?st
+          (flag_last YES) 
+        )
+        (modify ?penultimate_state
+          (flag_last NO) 
+        )
+        (modify ?fbest
+            (f_best 1)
+        )
+        (
+            if (= (nth$ 1 ?nums) 9)
+              then
+              (modify ?element1 (isUsed NO) (Numeral (nth$ 1 ?nums)))
+              else
+              (modify ?element1 (isUsed YES) (Numeral (nth$ 1 ?nums)))
+          )
+          (
+            if (= (nth$ 2 ?nums) 9)
+              then
+              (modify ?element2 (isUsed NO) (Numeral (nth$ 2 ?nums)))
+              else
+              (modify ?element2 (isUsed YES) (Numeral (nth$ 2 ?nums)))
+          )
+          (
+            if (= (nth$ 3 ?nums) 9)
+              then
+              (modify ?element3 (isUsed NO) (Numeral (nth$ 3 ?nums)))
+              else
+              (modify ?element3 (isUsed YES) (Numeral (nth$ 3 ?nums)))
+          )
+          (
+            if (= (nth$ 4 ?nums) 9)
+              then
+              (modify ?element4 (isUsed NO) (Numeral (nth$ 4 ?nums)))
+              else
+              (modify ?element4 (isUsed YES) (Numeral (nth$ 4 ?nums)))
+          )
+          (
+            if (= (nth$ 5 ?nums) 9)
+              then
+              (modify ?element5 (isUsed NO) (Numeral (nth$ 5 ?nums)))
+              else
+              (modify ?element5 (isUsed YES) (Numeral (nth$ 5 ?nums)))
+          )
+          (
+            if (= (nth$ 6 ?nums) 9)
+              then
+              (modify ?element6 (isUsed NO) (Numeral (nth$ 6 ?nums)))
+              else
+              (modify ?element6 (isUsed YES) (Numeral (nth$ 6 ?nums)))
+          )
+          (
+            if (= (nth$ 7 ?nums) 9)
+              then
+              (modify ?element7 (isUsed NO) (Numeral (nth$ 7 ?nums)))
+              else
+              (modify ?element7 (isUsed YES) (Numeral (nth$ 7 ?nums)))
+          )
+          (
+            if (= (nth$ 8 ?nums) 9)
+              then
+              (modify ?element8 (isUsed NO) (Numeral (nth$ 8 ?nums)))
+              else
+              (modify ?element8 (isUsed YES) (Numeral (nth$ 8 ?nums)))
+          )
+          (
+            if (= (nth$ 9 ?nums) 9)
+              then
+              (modify ?element9 (isUsed NO) (Numeral (nth$ 9 ?nums)))
+              else
+              (modify ?element9 (isUsed YES) (Numeral (nth$ 9 ?nums)))
+          )
+          (modify ?id 
+            (icheck 0)
+          )
+          (modify ?ad 
+            (acheck ?len)
+          )
+
+)
+
+;;(
+;;      defrule find_best_cost_eq
+;;        (declare (salience 0))
+;;        ?fd<-(final_depth (dpth ?dp))
+;;        ?fbest<-(flag (f_best ?fb))
+;;        (test (<> ?fb 1))
+;;        ?penultimate_state<-(state (flag_last YES))
+;;        ?st<-(state (Location ?value1))
+;;;        (not (state (Location ?value2&:(find_minimal ?value2 ?value1))))
+;;        =>
+;;        (printout t "Fact " ?value1 " is the minimum" crlf)
+;;        (modify ?st
+;;          (flag_last YES) 
+;;        )
+;;        (modify ?penultimate_state
+;;          (flag_last NO) 
+;;        )
+;;)
+
+(
+      defrule clear
+      (declare (salience 1))
+        ?fd<-(final_depth (dpth ?dp))
+        ?st<-(state (Depth ?dp) (flag_last NO))
+        =>
+        (retract ?st)
 )
 
 ;; replace$ - заменить в, начиная от, до, чем (мб несколько = участку от-до)
 (
       defrule move
+        (declare (salience 3))
         ?fmove<-(flag (f ?fmeaning))
+        ?fd<-(final_depth (dpth ?dp))
+        ?id<-(iter_checker (icheck ?ich))
+        ?ad<-(array_checker (acheck ?ach))
+        ?fbest<-(flag (f_best ?fb))
+        ?locat<-(locator_checker (locator ?l))
         ?from<-(Puzzle_8 (Location ?from_location) (isUsed YES) (Numeral ?number))
         ?to<-(Puzzle_8 (Location ?to_location) (isUsed NO) (Numeral ~?number))
         (Step_Of_Puzzle (from ?from_location) (to $?to_array&:(member$ ?to_location ?to_array)))
         ?st<-(state (flag_last YES) (Location ?state_location) (Depth ?dep) (heuristic_cost ?h) (visited_numerals $?some_nums))
-        ;;(not (state (heuristic_cost ?hvalue&:(< ?hvalue ?h))))
-        (test (< ?dep 50))
+        (test (< ?dep 10))
         (test (<> ?fmeaning 2))
         (test (member$ ?to_location $?to_array))
+        (test (<> ?ich ?ach))
         (
           forall 
             (state (Location ~?state_location) (visited_numerals $?nums&~$?some_nums))
             (test (neq (replace$ (replace$ $?some_nums ?to_location ?to_location ?number) ?from_location ?from_location 9) $?nums))
         )
         =>
-        (modify ?st 
-          (flag_last NO)
-        )
-        (assert (state (flag_last YES) (Location (+ ?state_location 1)) (Depth (+ ?dep 1))))
         (modify ?from
           (isUsed NO)  
           (Numeral 9)
@@ -268,14 +447,131 @@
           (isUsed YES) 
           (Numeral ?number)
         )
+        (bind ?c (+ ?ich 1))
+        (bind ?new_l (+ ?l 1))
+        (bind ?temp (nth$ 1 (find-fact ((?f Step_Of_Puzzle)) (= ?f:from ?to_location))))
+        (bind $?from_array (fact-slot-value ?temp to))
+        (bind ?len (length$ ?from_array))
+        ;;(printout t crlf "From " ?from_location)
+        ;;(printout t crlf "To " ?to_location)
+        ;;(printout t crlf "Length of 'to' is " ?len)
+        ;;(printout t crlf "They are " $?from_array)
+        ;;(printout t crlf "Visited "?c crlf)
+        (modify ?id 
+          (icheck ?c)
+        )
+        (modify ?ad 
+            (acheck ?len)
+        )
+        (modify ?locat 
+            (locator ?new_l)
+        )
+        (modify ?fbest
+            (f_best 0)
+        )
+        (assert (state (flag_last NO) (Location ?new_l) (Depth (+ ?dep 1))))
+)
+
+(
+        defrule reint_puzzle
+          (declare (salience 7))
+          ?element1<-(Puzzle_8 (Location 1))
+          ?element2<-(Puzzle_8 (Location 2))
+          ?element3<-(Puzzle_8 (Location 3))
+          ?element4<-(Puzzle_8 (Location 4))
+          ?element5<-(Puzzle_8 (Location 5))
+          ?element6<-(Puzzle_8 (Location 6))
+          ?element7<-(Puzzle_8 (Location 7))
+          ?element8<-(Puzzle_8 (Location 8))
+          ?element9<-(Puzzle_8 (Location 9))
+          ?last_state<-(state (flag_last YES) (visited_numerals $?nums))
+          =>
+          (
+            if (= (nth$ 1 ?nums) 9)
+              then
+              (modify ?element1 (isUsed NO) (Numeral (nth$ 1 ?nums)))
+              else
+              (modify ?element1 (isUsed YES) (Numeral (nth$ 1 ?nums)))
+          )
+          (
+            if (= (nth$ 2 ?nums) 9)
+              then
+              (modify ?element2 (isUsed NO) (Numeral (nth$ 2 ?nums)))
+              else
+              (modify ?element2 (isUsed YES) (Numeral (nth$ 2 ?nums)))
+          )
+          (
+            if (= (nth$ 3 ?nums) 9)
+              then
+              (modify ?element3 (isUsed NO) (Numeral (nth$ 3 ?nums)))
+              else
+              (modify ?element3 (isUsed YES) (Numeral (nth$ 3 ?nums)))
+          )
+          (
+            if (= (nth$ 4 ?nums) 9)
+              then
+              (modify ?element4 (isUsed NO) (Numeral (nth$ 4 ?nums)))
+              else
+              (modify ?element4 (isUsed YES) (Numeral (nth$ 4 ?nums)))
+          )
+          (
+            if (= (nth$ 5 ?nums) 9)
+              then
+              (modify ?element5 (isUsed NO) (Numeral (nth$ 5 ?nums)))
+              else
+              (modify ?element5 (isUsed YES) (Numeral (nth$ 5 ?nums)))
+          )
+          (
+            if (= (nth$ 6 ?nums) 9)
+              then
+              (modify ?element6 (isUsed NO) (Numeral (nth$ 6 ?nums)))
+              else
+              (modify ?element6 (isUsed YES) (Numeral (nth$ 6 ?nums)))
+          )
+          (
+            if (= (nth$ 7 ?nums) 9)
+              then
+              (modify ?element7 (isUsed NO) (Numeral (nth$ 7 ?nums)))
+              else
+              (modify ?element7 (isUsed YES) (Numeral (nth$ 7 ?nums)))
+          )
+          (
+            if (= (nth$ 8 ?nums) 9)
+              then
+              (modify ?element8 (isUsed NO) (Numeral (nth$ 8 ?nums)))
+              else
+              (modify ?element8 (isUsed YES) (Numeral (nth$ 8 ?nums)))
+          )
+          (
+            if (= (nth$ 9 ?nums) 9)
+              then
+              (modify ?element9 (isUsed NO) (Numeral (nth$ 9 ?nums)))
+              else
+              (modify ?element9 (isUsed YES) (Numeral (nth$ 9 ?nums)))
+          )
+)
+
+;; Сохраняем состояние
+(
+        defrule save_first_state_position
+          (declare (salience 8))
+          ?element<-(Puzzle_8 (Location ?loc) (Numeral ?number))
+          ?st<-(state (flag_last YES) (Depth ?dpt) (visited_numerals $?nums))
+          ?fd<-(final_depth (dpth ?dp))
+          (not (test (member$ ?number ?nums)))
+          =>
+          (bind ?nums (delete$ ?nums ?loc ?loc))
+          (bind ?nums (insert$ ?nums ?loc ?number))
+          (modify ?st (visited_numerals ?nums))
+          (modify ?fd (dpth ?dpt))
 )
 
 ;; Сохраняем состояние
 (
         defrule save_state_position
-          (declare (salience 5))
+          (declare (salience 8))
           ?element<-(Puzzle_8 (Location ?loc) (Numeral ?number))
-          ?st<-(state (flag_last YES) (Depth ?dpt) (visited_numerals $?nums))
+          ?st<-(state (flag_last NO) (Depth ?dpt) (visited_numerals $?nums))
           ?fd<-(final_depth (dpth ?dp))
           (not (test (member$ ?number ?nums)))
           =>
