@@ -173,6 +173,81 @@
         (return ?c)
 )
 
+;; Функция вычисления эвристики (манхэттен)
+(
+      deffunction manhattan (?nums)
+        (bind ?i 9)
+        (bind ?result 0)
+        (while (> ?i 0)
+            (bind ?numb (nth$ ?i ?nums))
+            ;;(printout t crlf "Number is: " ?numb crlf)
+            (bind ?goalcolumn (abs(mod (- ?numb 1) 3)))
+            (bind ?goalrow (abs(div (- ?numb 1) 3)))
+            ;;(printout t crlf "Goal col is: " ?goalcolumn ", Goal row is: " ?goalrow crlf)
+            (bind ?curcolumn 0)
+            (bind ?currow 0)
+            (
+            if (= ?i 9)
+              then
+                (bind ?curcolumn 2)
+                (bind ?currow 2)
+            )
+            (
+            if (= ?i 8)
+              then
+                (bind ?curcolumn 1)
+                (bind ?currow 2)
+            )
+            (
+            if (= ?i 7)
+              then
+                (bind ?curcolumn 0)
+                (bind ?currow 2)
+            )
+            (
+            if (= ?i 6)
+              then
+                (bind ?curcolumn 2)
+                (bind ?currow 1)
+            )
+            (
+            if (= ?i 5)
+              then
+                (bind ?curcolumn 1)
+                (bind ?currow 1)
+            )
+            (
+            if (= ?i 4)
+              then
+                (bind ?curcolumn 0)
+                (bind ?currow 1)
+            )
+            (
+            if (= ?i 3)
+              then
+                (bind ?curcolumn 2)
+                (bind ?currow 0)
+            )
+            (
+            if (= ?i 2)
+              then
+                (bind ?curcolumn 1)
+                (bind ?currow 0)
+            )
+            (
+            if (= ?i 1)
+              then
+                (bind ?curcolumn 0)
+                (bind ?currow 0)
+            )
+            ;;(printout t crlf "Cur col is: " ?curcolumn ", Cur row is: " ?currow crlf)
+            (bind ?temp (+ (abs(- ?curcolumn ?goalcolumn)) (abs(- ?currow ?goalrow))))
+            (bind ?result (+ ?temp ?result))
+            (bind ?i (- ?i 1))
+        )
+        ;;(printout t crlf "The final result is " ?result crlf)
+        (return ?result)
+)
 
 (
       defrule backtracking
@@ -265,10 +340,11 @@
 (
       defrule get_h_cost
         (declare (salience 4))
+        ?fd<-(final_depth (dpth ?dp))
         ?st<-(state (Location ?loc) (heuristic_cost ?cost) (visited_numerals $?nums))
         (test (= ?cost 0))
         =>
-        (bind ?temp (misplaced ?nums))
+        (bind ?temp (+ ?dp (manhattan ?nums)))
         (modify ?st (heuristic_cost ?temp))
 )
 
@@ -431,15 +507,15 @@
 ;;        )
 ;;)
 
-(
-      defrule clear
-      (declare (salience 4))
-        ?fd<-(final_depth (dpth ?dp))
-        ?st<-(state (Dead NO) (Depth ?dp) (flag_last NO))
-        (exists (state (Depth ?dp) (flag_last YES)))
-        =>
-        (retract ?st)
-)
+;;(
+;;      defrule clear
+;;      (declare (salience 4))
+;;        ?fd<-(final_depth (dpth ?dp))
+;;        ?st<-(state (Dead NO) (Depth ?dp) (flag_last NO))
+;;        (exists (state (Depth ?dp) (flag_last YES)))
+;;        =>
+;;        (retract ?st)
+;;)
 
 ;; replace$ - заменить в, начиная от, до, чем (мб несколько = участку от-до)
 (

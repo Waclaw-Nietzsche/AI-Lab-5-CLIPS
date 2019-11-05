@@ -265,10 +265,11 @@
 (
       defrule get_h_cost
         (declare (salience 4))
+        ?fd<-(final_depth (dpth ?dp))
         ?st<-(state (Location ?loc) (heuristic_cost ?cost) (visited_numerals $?nums))
         (test (= ?cost 0))
         =>
-        (bind ?temp (misplaced ?nums))
+        (bind ?temp (+ ?dp (misplaced ?nums)))
         (modify ?st (heuristic_cost ?temp))
 )
 
@@ -431,15 +432,15 @@
 ;;        )
 ;;)
 
-(
-      defrule clear
-      (declare (salience 4))
-        ?fd<-(final_depth (dpth ?dp))
-        ?st<-(state (Dead NO) (Depth ?dp) (flag_last NO))
-        (exists (state (Depth ?dp) (flag_last YES)))
-        =>
-        (retract ?st)
-)
+;;(
+;;      defrule clear
+;;      (declare (salience 4))
+;;        ?fd<-(final_depth (dpth ?dp))
+;;        ?st<-(state (Dead NO) (Depth ?dp) (flag_last NO))
+;;        (exists (state (Depth ?dp) (flag_last YES)))
+;;        =>
+;;        (retract ?st)
+;;)
 
 ;; replace$ - заменить в, начиная от, до, чем (мб несколько = участку от-до)
 (
